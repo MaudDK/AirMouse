@@ -1,6 +1,3 @@
-from statistics import mode
-from turtle import screensize
-from urllib import response
 import mediapipe as mp
 import cv2
 from pynput.mouse import Controller
