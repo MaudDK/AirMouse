@@ -97,9 +97,8 @@ class AirMouse():
         return frame
     
 
-    def get_handedness(self, index, hand_landmarks, results, frame):
-        #Code Block Start
-        output = None
+    def get_handedness(self, index, results):
+        text = None
         for hand in results.multi_handedness:
             classification = hand.classification[0]
                             
@@ -108,17 +107,25 @@ class AirMouse():
                 label = classification.label
                 score = classification.score
                 text = f'{label} {round(score,2)}'
-
-                #Extract Wrist Coordinates
-                x_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].x * frame.shape[0]
-                y_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].y * frame.shape[1]
-
-                coords = int(x_idx), int(y_idx)
-
-                output = text, coords
         
-        return output
-        #Code Block END
+        return text
+
+    def alt_get_handedness(self, index, results):
+        #TESTING THIS FUNCTION
+        text = None
+        hands = results.multi_handedness
+        if index == 0:
+            label = hands[index].classification[0].label
+            score = hands[index].classification[0].score
+            text = f'{label} {round(score,2)}'
+        
+        if index == 1:
+            label = hands[index].classification[0].label
+            score = hands[index].classification[0].score
+            text = f'{label} {round(score,2)}'
+        
+        return text
+
 
 
     def start(self):
@@ -133,8 +140,6 @@ class AirMouse():
                 #Get Frame Results
                 results, frame = self.process(frame, hands)
 
-                shape = frame.shape
-
                 #Draw Logic
                 if results.multi_hand_landmarks:
                     for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
@@ -142,25 +147,17 @@ class AirMouse():
                         self.mp_drawing.DrawingSpec(color=(69, 66, 237), thickness=4, circle_radius=2),  
                         self.mp_drawing.DrawingSpec(color=(79, 187, 91), thickness=2, circle_radius=2)
                         )
+
+                        #Extract Wrist Coordinates
+                        x_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].x * frame.shape[0]
+                        y_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].y * frame.shape[1]
+
+                        coords = int(x_idx), int(y_idx - 50)
                     
-                        handedness = self.get_handedness(idx, hand_landmarks, results, frame)
+                        handedness = self.alt_get_handedness(idx, results)
 
                         if handedness:
-                            text, coords = handedness
-                            cv2.putText(frame, text, coords, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-
-
-
-                    # for hand in results.multi_handedness:
-                    #     handType=hand.classification
-
-                    # for hand_landmarks in results.multi_hand_landmarks:
-                    #     self.mp_drawing.draw_landmarks(frame,
-                    #                                 hand_landmarks, 
-                    #                                 self.mp_hands.HAND_CONNECTIONS, 
-                    #                                 self.mp_drawing_styles.get_default_hand_landmarks_style(), 
-                    #                                 self.mp_drawing_styles.get_default_hand_connections_style())
+                            cv2.putText(frame, handedness, coords, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
 
                 # self.draw_hand(results, frame)
