@@ -95,38 +95,16 @@ class AirMouse():
                                                     self.mp_drawing_styles.get_default_hand_landmarks_style(), 
                                                     self.mp_drawing_styles.get_default_hand_connections_style())
         return frame
-    
+
 
     def get_handedness(self, index, results):
         text = None
-        for hand in results.multi_handedness:
-            classification = hand.classification[0]
-                            
-            if classification.index == index:
-                #Extract Handness
-                label = classification.label
-                score = classification.score
-                text = f'{label} {round(score,2)}'
-        
-        return text
-
-    def alt_get_handedness(self, index, results):
-        #TESTING THIS FUNCTION
-        text = None
         hands = results.multi_handedness
-        if index == 0:
-            label = hands[index].classification[0].label
-            score = hands[index].classification[0].score
-            text = f'{label} {round(score,2)}'
-        
-        if index == 1:
-            label = hands[index].classification[0].label
-            score = hands[index].classification[0].score
-            text = f'{label} {round(score,2)}'
+        label = hands[index].classification[0].label
+        score = hands[index].classification[0].score
+        text = f'{label} {round(score,2)}'
         
         return text
-
-
 
     def start(self):
         vcap = cv2.VideoCapture(0)
@@ -144,25 +122,23 @@ class AirMouse():
                 if results.multi_hand_landmarks:
                     for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
                         self.mp_drawing.draw_landmarks(frame, hand_landmarks,  self.mp_hands.HAND_CONNECTIONS,  
-                        self.mp_drawing.DrawingSpec(color=(69, 66, 237), thickness=4, circle_radius=2),  
-                        self.mp_drawing.DrawingSpec(color=(79, 187, 91), thickness=2, circle_radius=2)
+                        self.mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=6, circle_radius=1),  
+                        self.mp_drawing.DrawingSpec(color=(255, 200, 0), thickness=2, circle_radius=1)
                         )
 
                         #Extract Wrist Coordinates
-                        x_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].x * frame.shape[0]
-                        y_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].y * frame.shape[1]
-
-                        coords = int(x_idx), int(y_idx - 50)
+                        x_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].x * frame.shape[1]
+                        y_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].y * frame.shape[0]
                     
-                        handedness = self.alt_get_handedness(idx, results)
+                        handedness = self.get_handedness(idx, results)
 
                         if handedness:
-                            cv2.putText(frame, handedness, coords, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+                            cv2.putText(frame, handedness, (int(x_idx), int(y_idx+20)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (106, 206, 141), 2, cv2.LINE_AA)
 
 
                 # self.draw_hand(results, frame)
 
-                cv2.imshow('MediaPipe Hands', frame)
+                cv2.imshow('MediaPipe Hands', cv2.resize(frame, (int(frame.shape[1]/1.5), int(frame.shape[0]/1.5))))
                 cv2.moveWindow('MediaPipe Hands',0,0)
 
                 if cv2.waitKey(5) & 0xFF == 27:
