@@ -96,6 +96,31 @@ class AirMouse():
                                                     self.mp_drawing_styles.get_default_hand_connections_style())
         return frame
     
+
+    def get_handedness(self, index, hand_landmarks, results, frame):
+        #Code Block Start
+        output = None
+        for hand in results.multi_handedness:
+            classification = hand.classification[0]
+                            
+            if classification.index == index:
+                #Extract Handness
+                label = classification.label
+                score = classification.score
+                text = f'{label} {round(score,2)}'
+
+                #Extract Wrist Coordinates
+                x_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].x * frame.shape[0]
+                y_idx = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST].y * frame.shape[1]
+
+                coords = int(x_idx), int(y_idx)
+
+                output = text, coords
+        
+        return output
+        #Code Block END
+
+
     def start(self):
         vcap = cv2.VideoCapture(0)
         with self.hands as hands:
@@ -108,6 +133,8 @@ class AirMouse():
                 #Get Frame Results
                 results, frame = self.process(frame, hands)
 
+                shape = frame.shape
+
                 #Draw Logic
                 if results.multi_hand_landmarks:
                     for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
@@ -115,6 +142,14 @@ class AirMouse():
                         self.mp_drawing.DrawingSpec(color=(69, 66, 237), thickness=4, circle_radius=2),  
                         self.mp_drawing.DrawingSpec(color=(79, 187, 91), thickness=2, circle_radius=2)
                         )
+                    
+                        handedness = self.get_handedness(idx, hand_landmarks, results, frame)
+
+                        if handedness:
+                            text, coords = handedness
+                            cv2.putText(frame, text, coords, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+
 
 
                     # for hand in results.multi_handedness:
