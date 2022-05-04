@@ -1,17 +1,18 @@
-from turtle import left
 import mediapipe as mp
 import cv2
 import math
 from pynput.mouse import Button, Controller
 import ctypes
+import numpy as np
 
 
 class AirMouse():
-    def __init__(self, maxHands = 2):
+    def __init__(self, maxHands = 2, sens = 2):
         #Mouse Controls
         self.mouse = Controller()
         self.isClicked = False
         self.isReleased = True
+        self.sens = sens
 
         #Media Pipe Utils
         self.mp_drawing = mp.solutions.drawing_utils
@@ -57,24 +58,6 @@ class AirMouse():
             print(f"Mouse Move {dx}, {dy} ")
             self.mouse.move(dx,dy)
 
-    def process(self, frame, model):
-        #Fix for detecting right hand as left vice versa
-        frame = cv2.flip(frame, 1)
-
-        #BGR to RGB
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        #Detect Results
-        results = model.process(frame)
-
-        #Set Writeable Flag
-        frame.flags.writeable = True
-
-        #RGB 2 BGR
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        return results, frame
-
     def draw_hand(self, results, frame):
         if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
@@ -110,7 +93,7 @@ class AirMouse():
                 #Get Frame Results
                 results, frame = self.process(frame, hands)
 
-                #Draw Logic
+                #Landmark Parsing
                 if results.multi_hand_landmarks:
                     for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
                         #Determine Handedness
@@ -120,9 +103,14 @@ class AirMouse():
                         self.right_coords, self.left_coords = self.extract_coordinates(hand_landmarks.landmark, handedness, frame)
 
                         #Draw Landmarks
-                        self.drawHands(frame, hand_landmarks, handedness, 'WRIST')
+                        self.drawHands(frame, hand_landmarks, handedness)
+                    
+                    if self.right_coords:
+                        x, y = self.right_coords['MIDDLE_FINGER_MCP']
+                        self.moveMouseRelative(x * self.sens, y *self.sens)
 
 
+                #Display Window
                 cv2.imshow('MediaPipe Hands', cv2.resize(frame, (int(frame.shape[1]/1.5), int(frame.shape[0]/1.5))))
                 cv2.moveWindow('MediaPipe Hands',0,0)
 
@@ -130,23 +118,24 @@ class AirMouse():
                     break
 
             vcap.release()
+    
+    def process(self, frame, model):
+        #Fix for detecting right hand as left vice versa
+        frame = cv2.flip(frame, 1)
 
-    def drawHands(self, frame, hand_landmarks, handedness, marker = 'WRIST'):
+        #BGR to RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        #Draw Hand Landmarks
-        self.mp_drawing.draw_landmarks(
-            frame, hand_landmarks,  self.mp_hands.HAND_CONNECTIONS,  
-            self.mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=6, circle_radius=1),  
-            self.mp_drawing.DrawingSpec(color=(255, 200, 0), thickness=2, circle_radius=1)
-        )
+        #Detect Results
+        results = model.process(frame)
 
-        #Extract Coordinates for displaying handedness marker
-        if self.right_coords: wrist_land = self.right_coords[marker]
-        if self.left_coords: wrist_land = self.left_coords[marker]
+        #Set Writeable Flag
+        frame.flags.writeable = True
 
-        #Display Handedness marker on extracted coordinates
-        if handedness:
-            cv2.putText(frame, handedness, wrist_land, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (106, 206, 141), 2, cv2.LINE_AA)
+        #RGB 2 BGR
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        return results, frame
 
     def get_handedness(self, index, results):
         hands = results.multi_handedness
@@ -190,6 +179,41 @@ class AirMouse():
 
         return right_coord_dict, left_coord_dict
 
+    def drawHands(self, frame, hand_landmarks, handedness, marker = 'CENTER'):
+
+        #Draw Hand Landmarks
+        self.mp_drawing.draw_landmarks(
+            frame, hand_landmarks,  self.mp_hands.HAND_CONNECTIONS,  
+            self.mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=6, circle_radius=1),  
+            self.mp_drawing.DrawingSpec(color=(255, 200, 0), thickness=2, circle_radius=1)
+        )
+
+        #Extract Coordinates for displaying handedness marker
+        if self.right_coords:
+            if marker == 'CENTER': marker_coord = self.getHandCenter(self.right_coords)
+            else: marker_coord = self.right_coords[marker]
+
+        if self.left_coords:
+            if marker == 'CENTER': marker_coord = self.getHandCenter(self.left_coords)
+            else: marker_coord = self.left_coords[marker]
+
+        #Display Handedness marker on extracted coordinates
+        if handedness:
+            cv2.putText(frame, handedness, marker_coord, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (106, 206, 141), 2, cv2.LINE_AA)
+    
+    def getHandCenter(self, hand_coord_dict):
+        #Calculates Geometric Median of markers
+        markers = ['WRIST', 'THUMB_CMC', 'INDEX_FINGER_MCP', 'PINKY_MCP']
+        x_s = [hand_coord_dict[marker][0] for marker in markers]
+        y_s = [hand_coord_dict[marker][1] for marker in markers]
+
+        xlogs = np.log(x_s)
+        ylogs = np.log(y_s)
+
+        x_gmedian = np.exp(xlogs.mean())
+        y_gmedian = np.exp(ylogs.mean())
+
+        return round(x_gmedian), round(y_gmedian)
 
 
 if __name__ == '__main__':
