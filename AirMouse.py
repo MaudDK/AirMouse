@@ -1,3 +1,4 @@
+import time
 import mediapipe as mp
 import cv2
 import math
@@ -7,86 +8,34 @@ import numpy as np
 
 
 class AirMouse():
-    def __init__(self, maxHands = 2, sens = 2):
+    def __init__(self):
         #Mouse Controls
         self.mouse = Controller()
         self.isClicked = False
         self.isReleased = True
-        self.sens = sens
 
         #Media Pipe Utils
         self.mp_drawing = mp.solutions.drawing_utils
-        self.mp_hands = mp.solutions.hands
-
-
         self.mp_drawing_styles = mp.solutions.drawing_styles
+
+        #Media Pipe Model
+        self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(model_complexity=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
         #Screen Size
         user32 = ctypes.windll.user32
         self.screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
     
-    def handleClick(self, thumb_x, thumb_y, palm_x, palm_y):
-        dx = thumb_x - palm_x
-        dy = thumb_y - palm_y
-
-        distance = round(math.hypot(dx, dy))
-
-
-        if distance <= 50 and not self.isClicked:
-            print(f'ThumbPalm Distance:{distance}, Clicked')
-            self.mouse.press(Button.left)
-            self.isClicked = True
-            self.isReleased = False
-
-        if distance >= 70 and not self.isReleased:
-            print(f'ThumbPalm Distance:{distance}, Released')
-            self.mouse.release(Button.left)
-            self.isReleased = True
-            self.isClicked = False
-
-    def moveMouseRelative(self, newx, newy):
-        prevx, prevy = self.mouse.position
-        newx = self.screensize[0] - newx
-        dx =  newx - prevx
-        dy =  newy - prevy
-
-        distance = round(math.hypot(dx, dy))
-
-        # print(f'hand:({newx,newy}) mouse:({prevx, prevy}) |dx: {dx} | dy: {dy} | distance: {distance}')
-        if distance > 10 * self.sens:
-            print(f"Mouse Move {dx}, {dy} ")
-            self.mouse.move(dx,dy)
-
-    def draw_hand(self, results, frame):
-        if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    xindex = round(hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP].x * self.screensize[0])
-                    yindex = round(hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP].y * self.screensize[1])
-
-                    xthumb = round(hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP].x * self.screensize[0])
-                    ythumb = round(hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP].y * self.screensize[1])
-
-                    xindex_palm = round(hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP].x * self.screensize[0])
-                    yindex_palm = round(hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP].y * self.screensize[1])
-
-                    self.moveMouseRelative(xindex*self.sens, yindex *self.sens)
-                    self.handleClick(xthumb, ythumb, xindex_palm, yindex_palm)
-                        
-                    self.mp_drawing.draw_landmarks(frame,
-                                                    hand_landmarks, 
-                                                    self.mp_hands.HAND_CONNECTIONS, 
-                                                    self.mp_drawing_styles.get_default_hand_landmarks_style(), 
-                                                    self.mp_drawing_styles.get_default_hand_connections_style())
-        return frame
 
     def start(self):
+        #Set Video Capture to Webcam 0
         vcap = cv2.VideoCapture(0)
 
         with self.hands as hands:
             #Start video capture
             while vcap.isOpened():
                 response, frame = vcap.read()
+                #if frame errors breaks
                 if not response:
                     break
 
@@ -102,16 +51,26 @@ class AirMouse():
                         #Extract Coordinates
                         self.right_coords, self.left_coords = self.extract_coordinates(hand_landmarks.landmark, handedness, frame)
 
-                        #Draw Landmarks
-                        self.drawHands(frame, hand_landmarks, handedness)
+                        #Draw Landmarks on frame
+                        self.drawHands(frame, hand_landmarks, handedness, 'MIDDLE_FINGER_MCP')
                     
                     if self.right_coords:
+                        #Get Middle MCP Coord
                         x, y = self.right_coords['MIDDLE_FINGER_MCP']
-                        self.moveMouseRelative(x * self.sens, y *self.sens)
+                        
+                        #Move mouse based on middle finger mcp
+                        self.moveMouseRelative(x * self.screensize[0], y * self.screensize[1])
 
+                        #Get index and thumb coords
+                        xidx, yidx = self.right_coords['INDEX_FINGER_TIP']
+                        xthmb, ythmb = self.right_coords['THUMB_TIP']
+
+                        #Handles Click when indx and thumb are close
+                        self.handleClick(xthmb * self.screensize[0], ythmb * self.screensize[1], xidx * self.screensize[0], yidx * self.screensize[1])
+                    
 
                 #Display Window
-                cv2.imshow('MediaPipe Hands', cv2.resize(frame, (int(frame.shape[1]/1.5), int(frame.shape[0]/1.5))))
+                cv2.imshow('MediaPipe Hands', cv2.resize(frame, (frame.shape[1], frame.shape[0])))
                 cv2.moveWindow('MediaPipe Hands',0,0)
 
                 if cv2.waitKey(5) & 0xFF == 27:
@@ -138,12 +97,21 @@ class AirMouse():
         return results, frame
 
     def get_handedness(self, index, results):
+        #Hand classification results
         hands = results.multi_handedness
+
+        #Gets whether hand is left or right
         label = hands[index].classification[0].label
-        score = hands[index].classification[0].score
+
+        #Gets confidence score of hand
+        # score = hands[index].classification[0].score
+
+        #Returns hand left or right
         return label
 
     def extract_coordinates(self, landmarks, handedness, frame):
+
+        #Dictionary containing conversions of mediapipe id to keyword
         id_dict = {
         0:'WRIST', 
         1:'THUMB_CMC', 
@@ -167,16 +135,19 @@ class AirMouse():
         19: 'PINKY_DIP', 
         20: 'PINKY_TIP'}
 
+        #Empty dicts that will be filled with left hand landmarks and right hand landmarks
         right_coord_dict = dict()
         left_coord_dict = dict()
 
+
+        #Adds coords to the respective dictionary
         for key in id_dict:
             if handedness == 'Right':
-                right_coord_dict[id_dict[key]] = (int(landmarks[key].x * frame.shape[1]), int(landmarks[key].y * frame.shape[0]))
+                right_coord_dict[id_dict[key]] = landmarks[key].x, landmarks[key].y
             elif handedness == 'Left':
-                left_coord_dict[id_dict[key]] = (int(landmarks[key].x * frame.shape[1]), int(landmarks[key].y * frame.shape[0]))
-            
-
+                left_coord_dict[id_dict[key]] = landmarks[key].x, landmarks[key].y
+        
+        #Returns both dictionary
         return right_coord_dict, left_coord_dict
 
     def drawHands(self, frame, hand_landmarks, handedness, marker = 'CENTER'):
@@ -190,16 +161,16 @@ class AirMouse():
 
         #Extract Coordinates for displaying handedness marker
         if self.right_coords:
-            if marker == 'CENTER': marker_coord = self.getHandCenter(self.right_coords)
-            else: marker_coord = self.right_coords[marker]
+            if marker == 'CENTER': markX, markY = self.getHandCenter(self.right_coords)
+            else: markX, markY = self.right_coords[marker]
 
         if self.left_coords:
-            if marker == 'CENTER': marker_coord = self.getHandCenter(self.left_coords)
-            else: marker_coord = self.left_coords[marker]
+            if marker == 'CENTER': markX, markY = self.getHandCenter(self.left_coords)
+            else: markX, markY = self.left_coords[marker]
 
         #Display Handedness marker on extracted coordinates
         if handedness:
-            cv2.putText(frame, handedness, marker_coord, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (106, 206, 141), 2, cv2.LINE_AA)
+            cv2.putText(frame, handedness, (int(markX * frame.shape[1]), int(markY * frame.shape[0])) , cv2.FONT_HERSHEY_SIMPLEX, 0.6, (106, 206, 141), 2, cv2.LINE_AA)
     
     def getHandCenter(self, hand_coord_dict):
         #Calculates Geometric Median of markers
@@ -213,8 +184,48 @@ class AirMouse():
         x_gmedian = np.exp(xlogs.mean())
         y_gmedian = np.exp(ylogs.mean())
 
-        return round(x_gmedian), round(y_gmedian)
+        if x_gmedian == np.nan or y_gmedian == np.nan:
+            return 0, 0
 
+        #Returns coords of approximate center of the given markers
+        return int(x_gmedian), int(y_gmedian)
+
+    def moveMouseRelative(self, newx, newy):
+        #Get current Mouse Position
+        prevx, prevy = self.mouse.position
+
+        #Calculate change in x and y
+        dx =  newx - prevx
+        dy =  newy - prevy
+
+        #Calculate distance
+        distance = round(math.hypot(dx, dy))
+
+        #Smoothing mouse movement
+        if distance > 10:
+            self.mouse.move(dx, dy)
+    
+    def handleLeftClick(self, thumb_x, thumb_y, index_x, index_y):
+        #Calculate change in x and y
+        dx = thumb_x - index_x
+        dy = thumb_y - index_y
+
+        #Calculate distance
+        distance = round(math.hypot(dx, dy))
+
+
+        #Determine click bounds and click if acceptable
+        if distance <= 50 and not self.isClicked:
+            print(f'Clicked')
+            self.mouse.press(Button.left)
+            self.isClicked = True
+            self.isReleased = False
+
+        if distance >= 70 and not self.isReleased:
+            print(f'Released')
+            self.mouse.release(Button.left)
+            self.isReleased = True
+            self.isClicked = False
 
 if __name__ == '__main__':
     airMouse = AirMouse()
