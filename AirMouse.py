@@ -56,7 +56,7 @@ class AirMouse():
                     
                     if self.right_coords:
                         #Get Middle MCP Coord
-                        x, y = self.right_coords['MIDDLE_FINGER_MCP']
+                        x, y = self.right_coords['MIDDLE_FINGER_TIP']
                         
                         #Move mouse based on middle finger mcp
                         self.moveMouseRelative(x * self.screensize[0], y * self.screensize[1])
@@ -66,7 +66,7 @@ class AirMouse():
                         xthmb, ythmb = self.right_coords['THUMB_TIP']
 
                         #Handles Click when indx and thumb are close
-                        self.handleClick(xthmb * self.screensize[0], ythmb * self.screensize[1], xidx * self.screensize[0], yidx * self.screensize[1])
+                        self.handleLeftClick(xthmb * self.screensize[0], ythmb * self.screensize[1], xidx * self.screensize[0], yidx * self.screensize[1])
                     
 
                 #Display Window
