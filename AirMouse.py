@@ -8,11 +8,14 @@ import numpy as np
 
 
 class AirMouse():
-    def __init__(self):
+    def __init__(self, dispWindow=False):
         #Mouse Controls
         self.mouse = Controller()
         self.isClicked = False
         self.isReleased = True
+
+        #Display Window 
+        self.dispWindow = dispWindow
 
         #Media Pipe Utils
         self.mp_drawing = mp.solutions.drawing_utils
@@ -20,7 +23,7 @@ class AirMouse():
 
         #Media Pipe Model
         self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(model_complexity=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.hands = self.mp_hands.Hands(model_complexity=1, min_detection_confidence=0.5, min_tracking_confidence=0.8)
 
         #Screen Size
         user32 = ctypes.windll.user32
@@ -70,8 +73,9 @@ class AirMouse():
                     
 
                 #Display Window
-                cv2.imshow('MediaPipe Hands', cv2.resize(frame, (frame.shape[1], frame.shape[0])))
-                cv2.moveWindow('MediaPipe Hands',0,0)
+                if self.dispWindow:
+                    cv2.imshow('MediaPipe Hands', cv2.resize(frame, (1920, 1080)))
+                    cv2.moveWindow('MediaPipe Hands',0,0)
 
                 if cv2.waitKey(5) & 0xFF == 27:
                     break
@@ -194,6 +198,8 @@ class AirMouse():
         #Get current Mouse Position
         prevx, prevy = self.mouse.position
 
+        print(f'Frame (x,y): {newx} {newy} \nMouse Position (x,y): {newx} {newy} \n')
+
         #Calculate change in x and y
         dx =  newx - prevx
         dy =  newy - prevy
@@ -228,5 +234,5 @@ class AirMouse():
             self.isClicked = False
 
 if __name__ == '__main__':
-    airMouse = AirMouse()
+    airMouse = AirMouse(dispWindow=True)
     airMouse.start()
